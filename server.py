@@ -54,6 +54,9 @@ class DH_Alice(BaseRequestHandler):
         """Send integer, 'num' is decimal number."""
         self.request.sendall(data)
 
+    def recv_data(self):
+        return self.request.recv(8192).decode('utf8')
+
     def recv_int(self):
         """Receive and convert it to integer."""
         num_str = self.request.recv(8192).decode('utf8')
@@ -73,7 +76,7 @@ class DH_Alice(BaseRequestHandler):
         
         # receive g^x2
         g_x2 = self.recv_int()
-        
+
         # Calc Alice's key NOTE: do not share!!!!
         key_ = pow(g_x2, x1, p)
         key = hashlib.sha256(bytes.fromhex(hex(key_))).digest()
@@ -84,8 +87,16 @@ class DH_Alice(BaseRequestHandler):
         enc = encrypt(bytes(msg), key)
         self.send_data(enc)
 
+        while True:
+            data = self.recv_data()
+            if data.containes("I hate you"):
+                self.send_data(":(")
+            else:
+                self.send_data("From Server: " + data)
+
 
 if __name__ == '__main__':
+    dh: ThreadingTCPServer
     try:
         dh = ThreadingTCPServer(("0.0.0.0", 6004), DH_Alice)
         print("Serving on 0.0.0.0 port 6004 ...")

