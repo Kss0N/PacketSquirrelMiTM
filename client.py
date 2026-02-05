@@ -25,7 +25,7 @@ def generate_random(N, bits=1536):
 
 def send_int(num:int):
     """Send integer, 'num' is decimal number."""
-    num_str = format(num, 'x').encode('utf8')
+    num_str = format(num, 'x').encode('utf-8')
     client.sendall(num_str)
 
 def send_text(text:str):
@@ -82,7 +82,7 @@ if __name__ == '__main__':
         
     # Calc Bob's key NOTE: do not share!!!!
     key_ = pow(B, a, p)
-    key = hashlib.sha256(bytes.fromhex(hex(key_))).digest()
+    key = hashlib.sha256(bytes.fromhex(hex(key_)[2:])).digest()
 
     while True:
         data = recv_data()

@@ -79,7 +79,7 @@ class DH_Alice(BaseRequestHandler):
 
         # Calc Alice's key NOTE: do not share!!!!
         key_ = pow(g_x2, x1, p)
-        key = hashlib.sha256(bytes.fromhex(hex(key_))).digest()
+        key = hashlib.sha256(bytes.fromhex(hex(key_)[2:])).digest()
         # Encrypt the message
 
         msg = SECRET_MSG
