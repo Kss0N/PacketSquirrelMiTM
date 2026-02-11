@@ -59,7 +59,7 @@ def create_key(Num:int):
 def send_datagram(raw_packet, interface):
     try:
         s.bind((interface, 0))
-        s.send(raw_packet)
+        s.sendall(raw_packet)
     except OSError as e:
         print(f"Something went wrong in transmission: {e}")
 
@@ -123,28 +123,41 @@ def process_datagram(raw_packet, fromIf):
     toIf = "eth1" if fromIf == "eth0" else "eth0"
 
     # Ignore ARP, IPv6 and ICMP
-    if not isinstance(eth.data, dpkt.ip.IP) or not eth.type == dpkt.ethernet.ETH_TYPE_IP:
+    if not isinstance(eth.data, dpkt.ip.IP):
+        subprocess.run(["LED", "R", "SOLID"])
+        print("not ipv4")
         send_datagram(eth.__bytes__(), toIf)
         return
     ip = eth.data
 
     # Ignore UDP
-    if not isinstance(ip.data, dpkt.tcp.TCP) or not ip.p == dpkt.ip.IP_PROTO_TCP:
+    if not isinstance(ip.data, dpkt.tcp.TCP):
+        subprocess.run(["LED", "R", "SLOW"])
+        print("UDP")
         send_datagram(eth.__bytes__(), toIf)
         return
     tcp = ip.data
 
     #Ignore Irrelevant communications
     if tcp.sport != listenPort and tcp.dport != listenPort:
+        subprocess.run(["LED", "R", "FAST"])
+        print("Wrong port")
         send_datagram(eth.__bytes__(), toIf)
         return
     
-    # IGnore Handshake
-    if is_handshake(tcp):
-        send_datagram(eth.__bytes__(), toIf)
-        return
+    # Ignore Handshake
+    #if is_handshake(tcp):
+    #    subprocess.run(["LED", "B", "FAST"])
+    #    print("Handshake!")
+    #    send_datagram(eth.__bytes__(), toIf)
+    #    return
     
     data = bytes(tcp.data)
+    if len(data) == 0:
+        subprocess.run(["LED", "B", "FAST"])
+        print("Handshake!")
+        send_datagram(eth.__bytes__(), toIf)
+        return
     
     if Alice == 0:
         Alice_IP = inet_to_str(ip.src)
@@ -159,6 +172,7 @@ def process_datagram(raw_packet, fromIf):
         print(f"Sending {len(data_bob)} bytes to bob")
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_bob)
         send_datagram(eth2.__bytes__(), toIf)
+        subprocess.run(["LED", "W", "SOLID"])
         return
     elif Bob == 0 and Bob_IP == inet_to_str(ip.src):
         Bob_IP = inet_to_str(ip.src)
@@ -172,6 +186,7 @@ def process_datagram(raw_packet, fromIf):
         data_alice = format(Eve, "x").encode()
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_alice)
         send_datagram(eth2.__bytes__(), toIf)
+        subprocess.run(["LED", "Y", "SOLID"])
         return
     
     elif Alice != 0 and Bob != 0:
@@ -192,8 +207,12 @@ def process_datagram(raw_packet, fromIf):
 
         eth2 = swapTCPPayloadInEthernetFrame(eth, reencrypted)
         send_datagram(eth.__bytes__(), toIf)
+        subprocess.run(["LED", "M", "SOLID"])
         return
+    
     else:
+        subprocess.run(["LED", "G", "SOLID"])
+        print("something else")
         send_datagram(eth.__bytes__(), toIf)
         return
 
@@ -201,10 +220,10 @@ if __name__ == "__main__":
 
     try:
         while True:
-            raw_data, addr = s.recvfrom(65535)
+            raw_data, addr = s.recvfrom(1514) # Ethernet protocol allows for max of 1500 bytes of payload + 14 bytes of header. 4 bytes CRC is automatically handled by the system.
 
             interface = addr[0]
-            if(interface == "eth0" or interface=="eth1"):
+            if(interface == "eth0" or interface=="eth1"): # Switch the interface to be able to propagate the message.
                 process_datagram(raw_data, interface)
     except KeyboardInterrupt:
         s.close()
