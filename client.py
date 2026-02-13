@@ -84,4 +84,4 @@ if __name__ == '__main__':
         print(plaintext)
         new_data = str(input(">"))
 
-        send_data(encrypt(new_data, key))
+        send_data(encrypt(new_data.encode(), key))
