@@ -7,7 +7,7 @@ import os
 import socket
 import binascii
 import sys
-from pyaes import AES
+import pyaes
 import hashlib
 
 def generate_random(N, bits=1536):
@@ -42,25 +42,18 @@ def recv_data():
 # Electronic code book is bad, but good enough for this example.
 
 def encrypt(plaintext: bytes, key: bytes):
-    aes = AES(key)
-    buf = bytearray(plaintext)
-    if len(buf) % 16 != 0:
-        residual = len(buf) & 16
-        buf.extend(bytearray(residual))
-
-    plaintext_blocks = [buf[i:i+16] for i in range(0, len(buf), 16)]
-    ciphertext_blocks = [bytes(aes.encrypt(bytes(block))) for block in plaintext_blocks]
-    return b"".join(ciphertext_blocks)
+    aes = pyaes.AESModeOfOperationECB(key)
+    encrypter = pyaes.Encrypter(aes)
+    ciphertext = encrypter.feed(plaintext)
+    ciphertext += encrypter.feed()
+    return ciphertext
 
 def decrypt(ciphertext: bytes, key: bytes):
-    aes = AES(key)
-    buf = bytearray(ciphertext)
-    if len(buf) % 16 != 0:
-        residual = len(buf) & 16
-        buf.extend(bytearray(residual))
-    ciphertext_blocks = [buf[i:i+16] for i in range(0, len(buf), 16)]
-    plaintext_blocks = [bytes(aes.decrypt(bytes(block))) for block in ciphertext_blocks]
-    return b"".join(plaintext_blocks)
+    aes = pyaes.AESModeOfOperationECB(key)
+    decrypter = pyaes.Decrypter(aes)
+    plaintext = decrypter.feed(ciphertext)
+    plaintext += decrypter.feed()
+    return plaintext
 
 
 if __name__ == '__main__':
@@ -89,4 +82,3 @@ if __name__ == '__main__':
         print(data)
         new_data = str(input(">"))
         send_text(new_data)
-

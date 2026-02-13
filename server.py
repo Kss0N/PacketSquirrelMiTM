@@ -11,7 +11,7 @@ import hashlib
 from pyaes import AES
 
 
-SECRET_MSG = b"I love you!"
+SECRET_MSG = "I love you!"
 
 
 def generate_random(N, bits=1536):
@@ -27,25 +27,18 @@ def generate_random(N, bits=1536):
     return rnd_num % N
 
 def encrypt(plaintext: bytes, key: bytes):
-    aes = AES(key)
-    buf = bytearray(plaintext)
-    if len(buf) % 16 != 0:
-        residual = len(buf) & 16
-        buf.extend(bytearray(residual))
-
-    plaintext_blocks = [buf[i:i+16] for i in range(0, len(buf), 16)]
-    ciphertext_blocks = [bytes(aes.encrypt(bytes(block))) for block in plaintext_blocks]
-    return b"".join(ciphertext_blocks)
+    aes = pyaes.AESModeOfOperationECB(key)
+    encrypter = pyaes.Encrypter(aes)
+    ciphertext = encrypter.feed(plaintext)
+    ciphertext += encrypter.feed()
+    return ciphertext
 
 def decrypt(ciphertext: bytes, key: bytes):
-    aes = AES(key)
-    buf = bytearray(ciphertext)
-    if len(buf) % 16 != 0:
-        residual = len(buf) & 16
-        buf.extend(bytearray(residual))
-    ciphertext_blocks = [buf[i:i+16] for i in range(0, len(buf), 16)]
-    plaintext_blocks = [bytes(aes.decrypt(bytes(block))) for block in ciphertext_blocks]
-    return b"".join(plaintext_blocks)
+    aes = pyaes.AESModeOfOperationECB(key)
+    decrypter = pyaes.Decrypter(aes)
+    plaintext = decrypter.feed(ciphertext)
+    plaintext += decrypter.feed()
+    return plaintext
 
 class DH_Alice(BaseRequestHandler):
     """Alice the DH server."""
@@ -84,7 +77,7 @@ class DH_Alice(BaseRequestHandler):
 
         msg = SECRET_MSG
 
-        enc = encrypt(bytes(msg), key)
+        enc = encrypt(msg.encode("utf-8"), key)
         self.send_data(enc)
 
         while True:

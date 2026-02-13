@@ -73,25 +73,18 @@ def handle_spoofed_data(data: bytes) -> bytes:
         return data
 
 def encrypt(plaintext: bytes, key: bytes):
-    aes = AES(key)
-    buf = bytearray(plaintext)
-    if len(buf) % 16 != 0:
-        residual = len(buf) % 16
-        buf.extend(bytearray(residual))
-
-    plaintext_blocks = [buf[i:i+16] for i in range(0, len(buf), 16)]
-    ciphertext_blocks = [bytes(aes.encrypt(bytes(block))) for block in plaintext_blocks]
-    return b"".join(ciphertext_blocks)
+    aes = pyaes.AESModeOfOperationECB(key)
+    encrypter = pyaes.Encrypter(aes)
+    ciphertext = encrypter.feed(plaintext)
+    ciphertext += encrypter.feed()
+    return ciphertext
 
 def decrypt(ciphertext: bytes, key: bytes):
-    aes = AES(key)
-    buf = bytearray(ciphertext)
-    if len(buf) % 16 != 0:
-        residual = len(buf) % 16
-        buf.extend(bytearray(residual))
-    ciphertext_blocks = [buf[i:i+16] for i in range(0, len(buf), 16)]
-    plaintext_blocks = [bytes(aes.decrypt(bytes(block))) for block in ciphertext_blocks]
-    return b"".join(plaintext_blocks)
+    aes = pyaes.AESModeOfOperationECB(key)
+    decrypter = pyaes.Decrypter(aes)
+    plaintext = decrypter.feed(ciphertext)
+    plaintext += decrypter.feed()
+    return plaintext
 
 
 def swapTCPPayloadInEthernetFrame(eth : dpkt.ethernet.Ethernet, data : bytes) -> dpkt.ethernet.Ethernet :
@@ -120,19 +113,21 @@ def process_datagram(raw_packet, fromIf):
     global Alice, Alice_IP, Alice_key, Bob, Bob_IP, Bob_key
 
     eth = dpkt.ethernet.Ethernet(raw_packet)
-    toIf = "eth1" if fromIf == "eth0" else "eth0"
+    toIf = "eth1" if fromIf == "eth0" else "eth0" # Switch the interface to be able to propagate the message.
 
-    # Ignore ARP, IPv6 and ICMP
-    if not isinstance(eth.data, dpkt.ip.IP):
-        subprocess.run(["LED", "R", "SOLID"])
-        print("not ipv4")
+    # Ignore ARP and ICMP
+    if not isinstance(eth.data, dpkt.ip.IP) or not isinstance(eth.data, dpkt.ip6.IP6):
+        subprocess.run(["LED", "R", "FAST"])
+
+
+        print("not ipv4 or ipv6:", hex(eth.type))
         send_datagram(eth.__bytes__(), toIf)
         return
     ip = eth.data
 
     # Ignore UDP
     if not isinstance(ip.data, dpkt.tcp.TCP):
-        subprocess.run(["LED", "R", "SLOW"])
+        subprocess.run(["LED", "R", "FAST"])
         print("UDP")
         send_datagram(eth.__bytes__(), toIf)
         return
@@ -211,7 +206,6 @@ def process_datagram(raw_packet, fromIf):
         return
     
     else:
-        subprocess.run(["LED", "G", "SOLID"])
         print("something else")
         send_datagram(eth.__bytes__(), toIf)
         return
@@ -220,11 +214,13 @@ if __name__ == "__main__":
 
     try:
         while True:
-            raw_data, addr = s.recvfrom(1514) # Ethernet protocol allows for max of 1500 bytes of payload + 14 bytes of header. 4 bytes CRC is automatically handled by the system.
+            subprocess.run(["LED", 'OFF'])
+            raw_data, addr = s.recvfrom(dpkt.ethernet.ETH_LEN_MAX)
 
             interface = addr[0]
-            if(interface == "eth0" or interface=="eth1"): # Switch the interface to be able to propagate the message.
+            if (interface == "eth0" or interface=="eth1"): 
                 process_datagram(raw_data, interface)
+            else:
+                send_datagram(raw_data, interface)
     except KeyboardInterrupt:
         s.close()
-
