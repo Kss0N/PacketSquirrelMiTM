@@ -64,26 +64,29 @@ if __name__ == '__main__':
     g = 2
     # connect
     host = sys.argv[1]
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((host, 6004))
-    # Add your own code for DH kex
 
-    a = generate_random(p)
-    A = pow(g, a, p)
-    send_int(A)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.connect((host, 6004))
+        # Add your own code for DH kex
 
-    B = recv_int()
+        a = generate_random(p)
+        A = pow(g, a, p)
+        send_int(A)
+
+        B = recv_int()
+            
+        # Calc Bob's key NOTE: do not share!!!!
+        key_ = pow(B, a, p)
+        key = hashlib.sha256(bytes.fromhex(hex(key_)[2:])).digest()
+        print("My Key:", key.hex())
+
         
-    # Calc Bob's key NOTE: do not share!!!!
-    key_ = pow(B, a, p)
-    key = hashlib.sha256(bytes.fromhex(hex(key_)[2:])).digest()
+        while True:
+            data = recv_data()
+            plaintext = decrypt(data, key).decode('utf-8')
+            print(plaintext)
+            new_text = str(input(">"))
+            if new_text == "exit()":
+                break
+            send_data(encrypt(new_text.encode(), key))
 
-    while True:
-        data = recv_data()
-        plaintext = decrypt(data, key).decode('utf-8')
-        print(plaintext)
-        new_text = str(input(">"))
-        if new_text == "exit()":
-            break
-
-        send_data(encrypt(new_text.encode(), key))

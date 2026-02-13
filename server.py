@@ -65,10 +65,11 @@ class DH_Alice(BaseRequestHandler):
         x1 = generate_random(p)
         # calc g^x1 & send (A -> B)
         g_x1 = format(pow(g, x1, p), "x").encode()
-        self.send_data(g_x1)
         
-        # receive g^x2
+        # receive g^x2 and send g^x1 back
         g_x2 = self.recv_int()
+        
+        self.send_data(g_x1)
 
         # Calc Alice's key NOTE: do not share!!!!
         key_ = pow(g_x2, x1, p)
@@ -82,13 +83,13 @@ class DH_Alice(BaseRequestHandler):
 
         while True:
             data = self.recv_data()
-            if len(data) == 0:
-                continue
-
+            if not data:
+                break # Goodbye
+            
             plaintext = decrypt(data, key).decode('utf-8')
             print(plaintext)
             
-            if  "I love you" in plaintext:
+            if "I love you" in plaintext:
                 ciphertext = encrypt("<3".encode(), key)
                 self.send_data(ciphertext)
 

