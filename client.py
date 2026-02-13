@@ -28,8 +28,8 @@ def send_int(num:int):
     num_str = format(num, 'x').encode('utf-8')
     client.sendall(num_str)
 
-def send_text(text:str):
-    client.sendall(text.encode('utf-8'))
+def send_data(data:bytes):
+    client.sendall(data)
 
 def recv_int():
     """Receive and convert it to integer."""
@@ -37,7 +37,8 @@ def recv_int():
     return int(num_str, 16)
 
 def recv_data():
-    return client.recv(8192).decode('utf-8')
+    data = client.recv(8192)
+    return data
 
 # Electronic code book is bad, but good enough for this example.
 
@@ -79,6 +80,8 @@ if __name__ == '__main__':
 
     while True:
         data = recv_data()
-        print(data)
+        plaintext = decrypt(data, key).decode('utf-8')
+        print(plaintext)
         new_data = str(input(">"))
-        send_text(new_data)
+
+        send_data(encrypt(new_data, key))

@@ -48,7 +48,7 @@ class DH_Alice(BaseRequestHandler):
         self.request.sendall(data)
 
     def recv_data(self):
-        return self.request.recv(8192).decode('utf8')
+        return self.request.recv(8192)
 
     def recv_int(self):
         """Receive and convert it to integer."""
@@ -82,10 +82,14 @@ class DH_Alice(BaseRequestHandler):
 
         while True:
             data = self.recv_data()
-            if "I hate you" in data:
-                self.send_data(":(".encode())
+            plaintext = decrypt(data, key)
+            if "I hate you" in plaintext:
+                ciphertext = encrypt(":(".encode(), key)
+                self.send_data(ciphertext)
             else:
-                self.send_data(("From Server: " + str(data)).encode())
+                new_plaintext = "From Server: " + plaintext
+                ciphertext = encrypt(new_plaintext.encode(), key)
+                self.send_data(ciphertext)
 
 
 if __name__ == '__main__':
