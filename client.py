@@ -82,6 +82,8 @@ if __name__ == '__main__':
         data = recv_data()
         plaintext = decrypt(data, key).decode('utf-8')
         print(plaintext)
-        new_data = str(input(">"))
+        new_text = str(input(">"))
+        if new_text == "exit()":
+            break
 
-        send_data(encrypt(new_data.encode(), key))
+        send_data(encrypt(new_text.encode(), key))

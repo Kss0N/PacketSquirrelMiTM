@@ -82,7 +82,12 @@ class DH_Alice(BaseRequestHandler):
 
         while True:
             data = self.recv_data()
-            plaintext = decrypt(data, key).decode()
+            if len(data) == 0:
+                continue
+
+            plaintext = decrypt(data, key).decode('utf-8')
+            print(plaintext)
+            
             if  "I love you" in plaintext:
                 ciphertext = encrypt("<3".encode(), key)
                 self.send_data(ciphertext)
