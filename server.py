@@ -82,10 +82,10 @@ class DH_Alice(BaseRequestHandler):
 
         while True:
             data = self.recv_data()
-            if data.containes("I hate you"):
-                self.send_data(":(")
+            if "I hate you" in data:
+                self.send_data(":(".encode())
             else:
-                self.send_data("From Server: " + data)
+                self.send_data(("From Server: " + str(data)).encode())
 
 
 if __name__ == '__main__':
