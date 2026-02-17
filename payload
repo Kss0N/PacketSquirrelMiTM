@@ -1,0 +1,16 @@
+#!/bin/bash
+
+NETMODE NAT
+LED G SOLID
+
+nft add table inet my_table
+
+nft add chain inet my_table my_input_chain {type filter hook input priority 0 \;}
+nft add chain inet my_table my_output_chain {type filter hook output priority 0 \;}
+
+nft add rule inet my_table my_input_chain tcp dport 6004 queue num 1 # when dport is 6004
+nft add rule inet my_table my_input_chain tcp sport 6004 queue num 1 # when sport is 6004
+
+# Outgoing data should be accepted.
+nft add rule inet my_table my_output_chain tcp sport 6004 accept
+nft add rule inet my_table my_output_chain tcp dport 6004 accept

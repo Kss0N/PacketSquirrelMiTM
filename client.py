@@ -78,7 +78,6 @@ if __name__ == '__main__':
         # Calc Bob's key NOTE: do not share!!!!
         key_ = pow(B, a, p)
         key = hashlib.sha256(bytes.fromhex(hex(key_)[2:])).digest()
-        print("My Key:", key.hex())
 
         
         while True:
